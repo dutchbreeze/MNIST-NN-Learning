@@ -1,0 +1,5 @@
+﻿.vs
+MnistNNTraining/bin
+MnistNNTraining/obj
+MnistNNTraining.Server/bin
+MnistNNTraining.Server/obj

@@ -1,0 +1,15 @@
+[
+  {
+    "Name": "New Profile",
+    "Projects": [
+      {
+        "Path": "MnistNNTraining\\MnistNNTraining.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "MnistNNTraining.Server\\MnistNNTraining.Server.csproj",
+        "Action": "Start"
+      }
+    ]
+  }
+]

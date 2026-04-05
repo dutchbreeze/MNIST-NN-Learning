@@ -1,0 +1,39 @@
+@* Renders a 28x28 MNIST image as an SVG grid *@
+
+<div class="image-preview">
+    <svg width="@Size" height="@Size" viewBox="0 0 28 28" class="mnist-image"
+         style="image-rendering: pixelated;">
+        @if (Pixels != null)
+        {
+            @for (int row = 0; row < 28; row++)
+            {
+                @for (int col = 0; col < 28; col++)
+                {
+                    int idx = row * 28 + col;
+                    byte val = Pixels[idx];
+                    <rect x="@col" y="@row" width="1" height="1" fill="rgb(@val,@val,@val)" />
+                }
+            }
+        }
+    </svg>
+    @if (Label >= 0)
+    {
+        <div class="image-label">
+            <span class="label-text">Label: <strong>@Label</strong></span>
+            @if (Prediction >= 0)
+            {
+                <span class="prediction-text @(Prediction == Label ? "correct" : "incorrect")">
+                    Predicted: <strong>@Prediction</strong>
+                    @(Prediction == Label ? "✓" : "✗")
+                </span>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public byte[]? Pixels { get; set; }
+    [Parameter] public int Label { get; set; } = -1;
+    [Parameter] public int Prediction { get; set; } = -1;
+    [Parameter] public int Size { get; set; } = 140;
+}

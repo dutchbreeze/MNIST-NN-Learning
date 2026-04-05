@@ -1,0 +1,264 @@
+@using MnistNNTraining.Models
+@using Microsoft.AspNetCore.Components
+
+<div class="network-viz-container">
+    <svg width="@SvgWidth" height="@SvgHeight" viewBox="0 0 @SvgWidth @SvgHeight"
+         xmlns="http://www.w3.org/2000/svg" class="network-svg">
+
+        <defs>
+            <filter id="glow">
+                <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+                <feMerge>
+                    <feMergeNode in="coloredBlur"/>
+                    <feMergeNode in="SourceGraphic"/>
+                </feMerge>
+            </filter>
+        </defs>
+
+        @* ---- Connection lines (weights) ---- *@
+        @if (Network != null && Network.Layers.Count >= 3)
+        {
+            @* Input → Hidden connections (sample) *@
+            @for (int hi = 0; hi < DisplayHiddenCount; hi++)
+            {
+                int hiddenIdx = GetHiddenDisplayIndex(hi);
+                double hy = GetHiddenNodeY(hi);
+
+                @for (int ii = 0; ii < DisplayInputCount; ii++)
+                {
+                    int inputIdx = GetInputDisplayIndex(ii);
+                    double iy = GetInputNodeY(ii);
+                    double weight = Network.Layers[1].Weights[hiddenIdx][inputIdx];
+                    string color = WeightColor(weight);
+                    double opacity = Math.Min(Math.Abs(weight) * 2, 0.8);
+
+                    <line x1="@InputX" y1="@iy" x2="@HiddenX" y2="@hy"
+                          stroke="@color" stroke-width="1" opacity="@opacity.ToString("F2")" />
+                }
+            }
+
+            @* Hidden → Output connections *@
+            @for (int oi = 0; oi < 10; oi++)
+            {
+                double oy = GetOutputNodeY(oi);
+
+                @for (int hi = 0; hi < DisplayHiddenCount; hi++)
+                {
+                    int hiddenIdx = GetHiddenDisplayIndex(hi);
+                    double hy = GetHiddenNodeY(hi);
+                    double weight = Network.Layers[2].Weights[oi][hiddenIdx];
+                    string color = WeightColor(weight);
+                    double opacity = Math.Min(Math.Abs(weight) * 2, 0.8);
+
+                    <line x1="@HiddenX" y1="@hy" x2="@OutputX" y2="@oy"
+                          stroke="@color" stroke-width="1.5" opacity="@opacity.ToString("F2")" />
+                }
+            }
+        }
+
+        @* ---- Layer labels ---- *@
+        @(SvgText(InputX, 25, "middle", "layer-label", "Input (784)"))
+        @(SvgText(HiddenX, 25, "middle", "layer-label", "Hidden (128)"))
+        @(SvgText(OutputX, 25, "middle", "layer-label", "Output (10)"))
+
+        @if (Network != null)
+        {
+            @* ---- Input layer nodes ---- *@
+            @for (int i = 0; i < DisplayInputCount; i++)
+            {
+                int idx = GetInputDisplayIndex(i);
+                double y = GetInputNodeY(i);
+                double activation = Network.Layers[0].Activations[idx];
+                string fill = ActivationFill(activation);
+
+                <circle cx="@InputX" cy="@y" r="@NodeRadius"
+                        fill="@fill" stroke="#4a5568" stroke-width="1.5"
+                        class="node" @onclick="() => SelectNode(0, idx)" />
+
+                @if (i == DisplayInputCount / 2 && 784 > DisplayInputCount)
+                {
+                    @(SvgText(InputX - 25, y + 4, "end", "ellipsis-label", "⋮ 784"))
+                }
+            }
+
+            @* ---- Hidden layer nodes ---- *@
+            @for (int i = 0; i < DisplayHiddenCount; i++)
+            {
+                int idx = GetHiddenDisplayIndex(i);
+                double y = GetHiddenNodeY(i);
+                double activation = Network.Layers[1].Activations[idx];
+                string fill = ActivationFill(activation);
+
+                <circle cx="@HiddenX" cy="@y" r="@NodeRadius"
+                        fill="@fill" stroke="#4a5568" stroke-width="1.5"
+                        filter="url(#glow)"
+                        class="node" @onclick="() => SelectNode(1, idx)" />
+
+                @(SvgText(HiddenX, y + 4, "middle", "node-value", activation.ToString("F2")))
+
+                @if (i == DisplayHiddenCount / 2 && 128 > DisplayHiddenCount)
+                {
+                    @(SvgText(HiddenX - 25, y + 4, "end", "ellipsis-label", "⋮ 128"))
+                }
+            }
+
+            @* ---- Output layer nodes ---- *@
+            @for (int i = 0; i < 10; i++)
+            {
+                double y = GetOutputNodeY(i);
+                double activation = Network.Layers[2].Activations[i];
+                string fill = ActivationFill(activation);
+                bool isMax = IsMaxOutput(i);
+
+                <circle cx="@OutputX" cy="@y" r="@(NodeRadius + 2)"
+                        fill="@fill" stroke="@(isMax ? "#48bb78" : "#4a5568")"
+                        stroke-width="@(isMax ? 3 : 1.5)"
+                        filter="@(isMax ? "url(#glow)" : "")"
+                        class="node" @onclick="() => SelectNode(2, i)" />
+
+                @(SvgText(OutputX, y + 5, "middle", "output-label", i.ToString()))
+                @(SvgText(OutputX + 28, y + 5, "start", "output-value", activation.ToString("F3")))
+            }
+        }
+
+        @* ---- Selected node details panel ---- *@
+        @if (SelectedLayer >= 0 && Network != null)
+        {
+            <rect x="@(SvgWidth - 220)" y="40" width="210" height="@DetailPanelHeight"
+                  rx="8" fill="#1a202c" stroke="#4a5568" opacity="0.95" />
+            @(SvgText(SvgWidth - 210, 62, null, "detail-title", $"{GetLayerName(SelectedLayer)} Node {SelectedNode}"))
+
+            @if (SelectedLayer > 0)
+            {
+                var layer = Network.Layers[SelectedLayer];
+                @(SvgText(SvgWidth - 210, 82, null, "detail-text", $"Bias: {layer.Biases[SelectedNode]:F4}"))
+                @(SvgText(SvgWidth - 210, 100, null, "detail-text", $"Pre-activation: {layer.PreActivations[SelectedNode]:F4}"))
+                @(SvgText(SvgWidth - 210, 118, null, "detail-text", $"Activation (σ): {layer.Activations[SelectedNode]:F4}"))
+                @(SvgText(SvgWidth - 210, 136, null, "detail-text", $"Delta: {layer.Deltas[SelectedNode]:F6}"))
+
+                var weights = layer.Weights[SelectedNode];
+                @(SvgText(SvgWidth - 210, 158, null, "detail-text", $"Weights: {weights.Length} inputs"))
+                @(SvgText(SvgWidth - 210, 176, null, "detail-text", $"W min: {weights.Min():F4} max: {weights.Max():F4}"))
+                @(SvgText(SvgWidth - 210, 194, null, "detail-text", $"W avg: {weights.Average():F4}"))
+            }
+            else
+            {
+                @(SvgText(SvgWidth - 210, 82, null, "detail-text", $"Activation: {Network.Layers[0].Activations[SelectedNode]:F4}"))
+                @(SvgText(SvgWidth - 210, 100, null, "detail-text", "(Pixel value, normalized 0-1)"))
+            }
+        }
+    </svg>
+</div>
+
+@code {
+    [Parameter] public NeuralNetwork? Network { get; set; }
+
+    private int SelectedLayer = -1;
+    private int SelectedNode = 0;
+
+    // Layout constants
+    private const int SvgWidth = 900;
+    private const int SvgHeight = 600;
+    private const int NodeRadius = 10;
+    private const int DisplayInputCount = 20;
+    private const int DisplayHiddenCount = 20;
+    private const double TopMargin = 45;
+    private const double BottomMargin = 20;
+
+    private double InputX => 100;
+    private double HiddenX => 420;
+    private double OutputX => 700;
+
+    private double UsableHeight => SvgHeight - TopMargin - BottomMargin;
+
+    private int DetailPanelHeight => SelectedLayer > 0 ? 170 : 80;
+
+    /// <summary>
+    /// Helper to emit SVG text elements without conflicting with Razor's text directive.
+    /// </summary>
+    private MarkupString SvgText(double x, double y, string? anchor, string cssClass, string content)
+    {
+        string anchorAttr = anchor != null ? $" text-anchor=\"{anchor}\"" : "";
+        string escaped = System.Net.WebUtility.HtmlEncode(content);
+        return new MarkupString($"<text x=\"{x}\" y=\"{y}\"{anchorAttr} class=\"{cssClass}\">{escaped}</text>");
+    }
+
+    private double GetInputNodeY(int displayIndex)
+    {
+        double spacing = UsableHeight / (DisplayInputCount + 1);
+        return TopMargin + spacing * (displayIndex + 1);
+    }
+
+    private double GetHiddenNodeY(int displayIndex)
+    {
+        double spacing = UsableHeight / (DisplayHiddenCount + 1);
+        return TopMargin + spacing * (displayIndex + 1);
+    }
+
+    private double GetOutputNodeY(int index)
+    {
+        double spacing = UsableHeight / 11;
+        return TopMargin + spacing * (index + 1);
+    }
+
+    private int GetInputDisplayIndex(int displayIndex)
+    {
+        return (int)(displayIndex * 784.0 / DisplayInputCount);
+    }
+
+    private int GetHiddenDisplayIndex(int displayIndex)
+    {
+        return (int)(displayIndex * 128.0 / DisplayHiddenCount);
+    }
+
+    private bool IsMaxOutput(int index)
+    {
+        if (Network == null) return false;
+        var acts = Network.Layers[2].Activations;
+        return index == Array.IndexOf(acts, acts.Max());
+    }
+
+    private string ActivationFill(double activation)
+    {
+        int r, g, b;
+        if (activation < 0.5)
+        {
+            double t = activation * 2;
+            r = (int)(30 + t * 225);
+            g = (int)(60 + t * 195);
+            b = (int)(180 + t * 75);
+        }
+        else
+        {
+            double t = (activation - 0.5) * 2;
+            r = (int)(255);
+            g = (int)(255 - t * 130);
+            b = (int)(255 - t * 200);
+        }
+        return $"rgb({r},{g},{b})";
+    }
+
+    private string WeightColor(double weight)
+    {
+        return weight >= 0 ? "#48bb78" : "#f56565";
+    }
+
+    private void SelectNode(int layer, int node)
+    {
+        if (SelectedLayer == layer && SelectedNode == node)
+            SelectedLayer = -1;
+        else
+        {
+            SelectedLayer = layer;
+            SelectedNode = node;
+        }
+    }
+
+    private string GetLayerName(int layer) => layer switch
+    {
+        0 => "Input",
+        1 => "Hidden",
+        2 => "Output",
+        _ => "?"
+    };
+}

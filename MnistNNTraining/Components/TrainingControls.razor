@@ -1,0 +1,96 @@
+@inject TrainingService Training
+
+<div class="training-controls">
+    <div class="controls-row">
+        <button class="btn btn-primary" @onclick="Training.TogglePlayPause"
+                disabled="@(!Training.IsDataLoaded)">
+            @(Training.IsPaused ? "▶ Play" : "⏸ Pause")
+        </button>
+
+        <button class="btn btn-secondary" @onclick="Training.StepTrain"
+                disabled="@(!Training.IsDataLoaded || !Training.IsPaused)">
+            ⏭ Step
+        </button>
+
+        <button class="btn btn-secondary" @onclick="Training.StepForwardOnly"
+                disabled="@(!Training.IsDataLoaded || !Training.IsPaused)">
+            👁 Forward Only
+        </button>
+
+        <button class="btn btn-danger" @onclick="Training.ResetNetwork">
+            ↺ Reset
+        </button>
+    </div>
+
+    <div class="controls-row sliders">
+        <div class="control-group">
+            <label>Speed (steps/tick): @Training.StepsPerTick</label>
+            <input type="range" min="1" max="100" step="1"
+                   value="@Training.StepsPerTick"
+                   @oninput="OnSpeedChanged" />
+        </div>
+
+        <div class="control-group">
+            <label>Learning Rate: @Training.Network.LearningRate.ToString("F4")</label>
+            <input type="range" min="0.001" max="2.0" step="0.001"
+                   value="@Training.Network.LearningRate"
+                   @oninput="OnLearningRateChanged" />
+        </div>
+
+        <div class="control-group">
+            <label>Tick Interval (ms): @TickInterval</label>
+            <input type="range" min="16" max="1000" step="16"
+                   value="@TickInterval"
+                   @oninput="OnTickIntervalChanged" />
+        </div>
+    </div>
+
+    <div class="stats-row">
+        <div class="stat">
+            <span class="stat-label">Epoch</span>
+            <span class="stat-value">@Training.Network.Epoch</span>
+        </div>
+        <div class="stat">
+            <span class="stat-label">Sample</span>
+            <span class="stat-value">@Training.CurrentSampleIndex / @Training.TrainingData.Count</span>
+        </div>
+        <div class="stat">
+            <span class="stat-label">Total Processed</span>
+            <span class="stat-value">@Training.Network.TotalSamplesProcessed</span>
+        </div>
+        <div class="stat">
+            <span class="stat-label">Avg Loss</span>
+            <span class="stat-value">@Training.AverageLoss.ToString("F4")</span>
+        </div>
+        <div class="stat">
+            <span class="stat-label">Last Accuracy</span>
+            <span class="stat-value">@Training.Network.Accuracy.ToString("F1")%</span>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public int TickInterval { get; set; } = 100;
+    [Parameter] public EventCallback<int> TickIntervalChanged { get; set; }
+
+    private void OnSpeedChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int val))
+            Training.StepsPerTick = val;
+    }
+
+    private void OnLearningRateChanged(ChangeEventArgs e)
+    {
+        if (double.TryParse(e.Value?.ToString(), out double val))
+            Training.Network.LearningRate = val;
+    }
+
+    private async Task OnTickIntervalChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int val))
+        {
+            TickInterval = val;
+            await TickIntervalChanged.InvokeAsync(val);
+        }
+    }
+}

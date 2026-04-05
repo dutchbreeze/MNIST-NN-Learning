@@ -1,0 +1,412 @@
+@page "/"
+@inject TrainingService Training
+@inject HttpClient Http
+@inject IJSRuntime JS
+@implements IDisposable
+
+<PageTitle>MNIST Neural Network Trainer</PageTitle>
+
+<div class="main-layout">
+    <header class="app-header">
+        <h1>MNIST Neural Network Trainer</h1>
+        <span class="architecture-badge">784 → 128 → 10 (Sigmoid)</span>
+    </header>
+
+    @if (!Training.IsDataLoaded)
+    {
+        <div class="data-upload-section">
+            <div class="upload-card">
+                <h2>Load Training Data</h2>
+
+                @* ---- Option 1: Load from TrainingData folder ---- *@
+                <div class="load-option">
+                    <h3>From TrainingData folder</h3>
+                    <p>Place your 28x28 JPG/PNG images in <code>TrainingData/0/</code> through <code>TrainingData/9/</code> subfolders.</p>
+
+                    @if (_serverInfo != null)
+                    {
+                        <div class="server-info">
+                            <span class="info-label">Found:</span>
+                            <span class="info-value">@_serverTotal images</span>
+                            @foreach (var kvp in _serverPerDigit)
+                            {
+                                <span class="digit-count">@kvp.Key: @kvp.Value</span>
+                            }
+                        </div>
+                    }
+
+                    <div class="control-group" style="margin-top: 0.5rem;">
+                        <label>Max images per digit: @_maxPerDigit (= @(_maxPerDigit * 10) total)</label>
+                        <input type="range" min="10" max="1000" step="10"
+                               value="@_maxPerDigit"
+                               @oninput="e => { if (int.TryParse(e.Value?.ToString(), out int v)) _maxPerDigit = v; }" />
+                    </div>
+
+                    @* ---- Loading progress bar ---- *@
+                    @if (_isLoading)
+                    {
+                        <div class="loading-section">
+                            <div class="progress-bar-container">
+                                <div class="progress-bar-fill @(_loadingPhase == "parsing" ? "progress-fast" : "progress-pulse")">
+                                </div>
+                            </div>
+                            <div class="loading-status">@_loadingStatus</div>
+                        </div>
+                    }
+
+                    <div class="button-row">
+                        <button class="btn btn-secondary" @onclick="CheckServer" disabled="@_isLoading">
+                            Check Folder
+                        </button>
+                        <button class="btn btn-primary" @onclick="LoadFromServer"
+                                disabled="@(_isLoading || _serverTotal == 0)">
+                            @if (_isLoading)
+                            {
+                                @:Loading...
+                            }
+                            else
+                            {
+                                @:Load up to @(_maxPerDigit * 10) Images
+                            }
+                        </button>
+                    </div>
+                </div>
+
+                <div class="divider">
+                    <span>or</span>
+                </div>
+
+                @* ---- Option 2: Upload IDX files ---- *@
+                <div class="load-option">
+                    <h3>Upload MNIST IDX files</h3>
+                    <p>Upload the standard <code>train-images-idx3-ubyte</code> and <code>train-labels-idx1-ubyte</code> files.</p>
+
+                    <div class="upload-row">
+                        <div class="upload-field">
+                            <label>Images file:</label>
+                            <InputFile OnChange="OnImagesFileSelected" accept="*" />
+                            @if (_imagesLoaded) { <span class="check">Loaded</span> }
+                        </div>
+                        <div class="upload-field">
+                            <label>Labels file:</label>
+                            <InputFile OnChange="OnLabelsFileSelected" accept="*" />
+                            @if (_labelsLoaded) { <span class="check">Loaded</span> }
+                        </div>
+                    </div>
+
+                    @if (_imagesLoaded && _labelsLoaded)
+                    {
+                        <button class="btn btn-primary btn-large" @onclick="LoadIdxData">
+                            Parse & Start
+                        </button>
+                    }
+                </div>
+
+                @if (!string.IsNullOrEmpty(_loadError))
+                {
+                    <div class="error-message">@_loadError</div>
+                }
+            </div>
+        </div>
+    }
+    else
+    {
+        <TrainingControls TickInterval="@_tickInterval" TickIntervalChanged="OnTickIntervalChanged" />
+
+        <div class="content-grid">
+            <div class="viz-panel">
+                <NetworkVisualization Network="Training.Network" />
+            </div>
+
+            <div class="side-panel">
+                @if (Training.CurrentSample != null)
+                {
+                    <div class="panel-card">
+                        <h3>Current Sample</h3>
+                        <ImagePreview Pixels="Training.CurrentSample.RawPixels"
+                                      Label="Training.CurrentSample.Label"
+                                      Prediction="@_currentPrediction" />
+                    </div>
+                }
+
+                <div class="panel-card">
+                    <h3>Training Progress (per epoch)</h3>
+                    <LossChart LossData="Training.LossHistory"
+                               AccuracyData="Training.AccuracyHistory"
+                               Width="380" Height="180" />
+                </div>
+
+                <div class="panel-card">
+                    <h3>Predictions (correct vs incorrect)</h3>
+                    <PredictionChart CorrectData="Training.CorrectHistory"
+                                     IncorrectData="Training.IncorrectHistory"
+                                     SnapshotInterval="Training.SnapshotInterval"
+                                     Width="380" Height="160" />
+                </div>
+
+                @{
+                    var modelInfo = Training.GetModelSizeInfo();
+                }
+                <div class="panel-card model-info">
+                    <h3>Model Info</h3>
+                    <div class="model-stats">
+                        <div class="model-stat">
+                            <span class="stat-label">Architecture</span>
+                            <span class="stat-value">@string.Join(" → ", modelInfo.Layers)</span>
+                        </div>
+                        <div class="model-stat">
+                            <span class="stat-label">Total Parameters</span>
+                            <span class="stat-value">@modelInfo.TotalParameters.ToString("N0")</span>
+                        </div>
+                        <div class="model-stat">
+                            <span class="stat-label">Weights</span>
+                            <span class="stat-value">@modelInfo.TotalWeights.ToString("N0")</span>
+                        </div>
+                        <div class="model-stat">
+                            <span class="stat-label">Biases</span>
+                            <span class="stat-value">@modelInfo.TotalBiases.ToString("N0")</span>
+                        </div>
+                        <div class="model-stat">
+                            <span class="stat-label">Size in memory</span>
+                            <span class="stat-value">@modelInfo.SizeKB.ToString("F1") KB</span>
+                        </div>
+                        <div class="model-stat">
+                            <span class="stat-label">Training samples</span>
+                            <span class="stat-value">@Training.TrainingData.Count.ToString("N0")</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel-card model-actions">
+                    <h3>Export / Import</h3>
+                    <button class="btn btn-secondary" @onclick="ExportModel">
+                        Export Model (JSON)
+                    </button>
+                    <div class="upload-field">
+                        <label>Import Model:</label>
+                        <InputFile OnChange="OnModelFileSelected" accept=".json" />
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    // IDX upload state
+    private byte[]? _imageBytes;
+    private byte[]? _labelBytes;
+    private bool _imagesLoaded;
+    private bool _labelsLoaded;
+
+    // Server folder state
+    private object? _serverInfo;
+    private int _serverTotal;
+    private int _maxPerDigit = 100;
+    private Dictionary<string, int> _serverPerDigit = new();
+    private bool _isLoading;
+    private string _loadingStatus = "";
+    private string _loadingPhase = "";
+
+    private string? _loadError;
+    private int _tickInterval = 100;
+    private int _currentPrediction = -1;
+    private System.Threading.Timer? _timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Training.OnStateChanged += OnTrainingStateChanged;
+        await CheckServer();
+    }
+
+    private async Task CheckServer()
+    {
+        try
+        {
+            _loadError = null;
+            var response = await Http.GetAsync("api/data/info");
+            if (response.IsSuccessStatusCode)
+            {
+                var json = await response.Content.ReadFromJsonAsync<ServerInfoResponse>();
+                if (json != null)
+                {
+                    _serverInfo = json;
+                    _serverTotal = json.Total;
+                    _serverPerDigit = json.PerDigit ?? new();
+                }
+            }
+            else
+            {
+                _serverTotal = 0;
+                _serverInfo = null;
+            }
+        }
+        catch
+        {
+            _serverTotal = 0;
+            _serverInfo = null;
+        }
+        StateHasChanged();
+    }
+
+    private async Task LoadFromServer()
+    {
+        try
+        {
+            _isLoading = true;
+            _loadError = null;
+            _loadingPhase = "downloading";
+            _loadingStatus = $"Downloading up to {_maxPerDigit * 10} images from server...";
+            StateHasChanged();
+            await Task.Delay(50); // Let the UI render the progress bar
+
+            var response = await Http.GetAsync($"api/data/training?maxPerDigit={_maxPerDigit}");
+            response.EnsureSuccessStatusCode();
+
+            _loadingPhase = "reading";
+            _loadingStatus = "Reading response data...";
+            StateHasChanged();
+            await Task.Delay(50);
+
+            var data = await response.Content.ReadAsByteArrayAsync();
+
+            _loadingPhase = "parsing";
+            _loadingStatus = $"Parsing {data.Length / 1024:N0} KB of image data...";
+            StateHasChanged();
+            await Task.Delay(50);
+
+            Training.LoadFromServerBinary(data);
+
+            _loadingStatus = $"Loaded {Training.TrainingData.Count} samples. Starting...";
+            StateHasChanged();
+            await Task.Delay(100);
+
+            Training.StepForwardOnly();
+            UpdatePrediction();
+            StartTimer();
+        }
+        catch (Exception ex)
+        {
+            _loadError = $"Error loading from server: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnImagesFileSelected(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            using var stream = e.File.OpenReadStream(maxAllowedSize: 100_000_000);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            _imageBytes = ms.ToArray();
+            _imagesLoaded = true;
+            _loadError = null;
+        }
+        catch (Exception ex)
+        {
+            _loadError = $"Error reading images file: {ex.Message}";
+        }
+    }
+
+    private async Task OnLabelsFileSelected(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            using var stream = e.File.OpenReadStream(maxAllowedSize: 100_000_000);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            _labelBytes = ms.ToArray();
+            _labelsLoaded = true;
+            _loadError = null;
+        }
+        catch (Exception ex)
+        {
+            _loadError = $"Error reading labels file: {ex.Message}";
+        }
+    }
+
+    private void LoadIdxData()
+    {
+        try
+        {
+            Training.LoadData(_imageBytes!, _labelBytes!);
+            Training.StepForwardOnly();
+            UpdatePrediction();
+            StartTimer();
+        }
+        catch (Exception ex)
+        {
+            _loadError = $"Error parsing MNIST data: {ex.Message}";
+        }
+    }
+
+    private void StartTimer()
+    {
+        _timer?.Dispose();
+        _timer = new System.Threading.Timer(async _ =>
+        {
+            Training.Tick();
+            UpdatePrediction();
+            await InvokeAsync(StateHasChanged);
+        }, null, 0, _tickInterval);
+    }
+
+    private void OnTickIntervalChanged(int newInterval)
+    {
+        _tickInterval = newInterval;
+        StartTimer();
+    }
+
+    private void UpdatePrediction()
+    {
+        if (Training.CurrentSample != null)
+        {
+            var output = Training.Network.Layers[^1].Activations;
+            _currentPrediction = Array.IndexOf(output, output.Max());
+        }
+    }
+
+    private void OnTrainingStateChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task ExportModel()
+    {
+        string json = Training.Network.ExportToJson();
+        await JS.InvokeVoidAsync("downloadFile", "mnist_model.json", json);
+    }
+
+    private async Task OnModelFileSelected(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            using var reader = new StreamReader(e.File.OpenReadStream(maxAllowedSize: 50_000_000));
+            string json = await reader.ReadToEndAsync();
+            Training.Network.ImportFromJson(json);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            _loadError = $"Error importing model: {ex.Message}";
+        }
+    }
+
+    public void Dispose()
+    {
+        _timer?.Dispose();
+        Training.OnStateChanged -= OnTrainingStateChanged;
+    }
+
+    private class ServerInfoResponse
+    {
+        public int Total { get; set; }
+        public Dictionary<string, int>? PerDigit { get; set; }
+        public string? Path { get; set; }
+    }
+}

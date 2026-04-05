@@ -1,0 +1,88 @@
+@* Simple SVG-based line chart for loss and accuracy history *@
+@using Microsoft.AspNetCore.Components
+
+<div class="chart-container">
+    <svg width="@Width" height="@Height" viewBox="0 0 @Width @Height" class="loss-chart">
+        @* Background *@
+        <rect width="@Width" height="@Height" fill="#1a202c" rx="8" />
+
+        @* Grid lines *@
+        @for (int i = 0; i <= 4; i++)
+        {
+            double y = Padding + (ChartHeight / 4.0) * i;
+            <line x1="@Padding" y1="@y" x2="@(Width - Padding)" y2="@y"
+                  stroke="#2d3748" stroke-width="1" />
+            @(SvgText(Padding - 5, y + 4, "end", "chart-label", (1.0 - i / 4.0).ToString("F1")))
+        }
+
+        @* Loss line *@
+        @if (LossData.Count > 1)
+        {
+            <polyline points="@GetLossPoints()" fill="none" stroke="#f56565"
+                      stroke-width="2" />
+        }
+
+        @* Accuracy line *@
+        @if (AccuracyData.Count > 1)
+        {
+            <polyline points="@GetAccuracyPoints()" fill="none" stroke="#48bb78"
+                      stroke-width="2" />
+        }
+
+        @* Legend *@
+        <rect x="@(Width - 130)" y="10" width="12" height="12" fill="#f56565" />
+        @(SvgText(Width - 112, 21, null, "chart-legend", "Avg Loss"))
+        <rect x="@(Width - 130)" y="28" width="12" height="12" fill="#48bb78" />
+        @(SvgText(Width - 112, 39, null, "chart-legend", "Accuracy %"))
+
+        @(SvgText(Width / 2.0, Height - 3, "middle", "chart-label", "Epoch"))
+    </svg>
+</div>
+
+@code {
+    [Parameter] public List<double> LossData { get; set; } = new();
+    [Parameter] public List<double> AccuracyData { get; set; } = new();
+    [Parameter] public int Width { get; set; } = 400;
+    [Parameter] public int Height { get; set; } = 200;
+
+    private const int Padding = 40;
+    private double ChartWidth => Width - 2 * Padding;
+    private double ChartHeight => Height - 2 * Padding;
+
+    private MarkupString SvgText(double x, double y, string? anchor, string cssClass, string content)
+    {
+        string anchorAttr = anchor != null ? $" text-anchor=\"{anchor}\"" : "";
+        string escaped = System.Net.WebUtility.HtmlEncode(content);
+        return new MarkupString($"<text x=\"{x}\" y=\"{y}\"{anchorAttr} class=\"{cssClass}\">{escaped}</text>");
+    }
+
+    private string GetLossPoints()
+    {
+        if (LossData.Count < 2) return "";
+        double maxLoss = Math.Max(LossData.Max(), 0.1);
+        var points = new List<string>();
+
+        for (int i = 0; i < LossData.Count; i++)
+        {
+            double x = Padding + (ChartWidth * i / (LossData.Count - 1));
+            double normalizedLoss = Math.Min(LossData[i] / maxLoss, 1.0);
+            double y = Padding + ChartHeight * (1 - normalizedLoss);
+            points.Add($"{x:F1},{y:F1}");
+        }
+        return string.Join(" ", points);
+    }
+
+    private string GetAccuracyPoints()
+    {
+        if (AccuracyData.Count < 2) return "";
+        var points = new List<string>();
+
+        for (int i = 0; i < AccuracyData.Count; i++)
+        {
+            double x = Padding + (ChartWidth * i / (AccuracyData.Count - 1));
+            double y = Padding + ChartHeight * (1 - AccuracyData[i] / 100.0);
+            points.Add($"{x:F1},{y:F1}");
+        }
+        return string.Join(" ", points);
+    }
+}

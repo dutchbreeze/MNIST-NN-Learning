@@ -1,0 +1,72 @@
+@* Stacked bar chart showing correct (green) vs incorrect (red) predictions over time *@
+@using Microsoft.AspNetCore.Components
+
+<div class="chart-container">
+    <svg width="@Width" height="@Height" viewBox="0 0 @Width @Height" class="prediction-chart">
+        <rect width="@Width" height="@Height" fill="#1a202c" rx="8" />
+
+        @if (CorrectData.Count > 0)
+        {
+            int displayCount = Math.Min(CorrectData.Count, MaxBars);
+            int startIdx = CorrectData.Count - displayCount;
+            double barWidth = ChartWidth / displayCount;
+            double maxVal = 1;
+
+            @for (int i = 0; i < displayCount; i++)
+            {
+                int idx = startIdx + i;
+                int total = CorrectData[idx] + IncorrectData[idx];
+                if (total > maxVal) maxVal = total;
+            }
+
+            @for (int i = 0; i < displayCount; i++)
+            {
+                int idx = startIdx + i;
+                int correct = CorrectData[idx];
+                int incorrect = IncorrectData[idx];
+                int total = correct + incorrect;
+                if (total == 0) continue;
+
+                double x = Padding + i * barWidth;
+                double correctHeight = (correct / maxVal) * ChartHeight;
+                double incorrectHeight = (incorrect / maxVal) * ChartHeight;
+
+                double correctY = Padding + ChartHeight - correctHeight;
+                double incorrectY = correctY - incorrectHeight;
+
+                <rect x="@(x + 1)" y="@correctY" width="@Math.Max(barWidth - 2, 1)"
+                      height="@correctHeight" fill="#48bb78" opacity="0.85" />
+                <rect x="@(x + 1)" y="@incorrectY" width="@Math.Max(barWidth - 2, 1)"
+                      height="@incorrectHeight" fill="#f56565" opacity="0.85" />
+            }
+        }
+
+        @* Legend *@
+        <rect x="@(Width - 130)" y="10" width="12" height="12" fill="#48bb78" />
+        @(SvgText(Width - 112, 21, null, "chart-legend", "Correct"))
+        <rect x="@(Width - 130)" y="28" width="12" height="12" fill="#f56565" />
+        @(SvgText(Width - 112, 39, null, "chart-legend", "Incorrect"))
+
+        @(SvgText(Width / 2.0, Height - 3, "middle", "chart-label", $"Per {SnapshotInterval} samples"))
+    </svg>
+</div>
+
+@code {
+    [Parameter] public List<int> CorrectData { get; set; } = new();
+    [Parameter] public List<int> IncorrectData { get; set; } = new();
+    [Parameter] public int SnapshotInterval { get; set; } = 100;
+    [Parameter] public int Width { get; set; } = 380;
+    [Parameter] public int Height { get; set; } = 160;
+
+    private const int Padding = 10;
+    private const int MaxBars = 80;
+    private double ChartWidth => Width - 2 * Padding;
+    private double ChartHeight => Height - 2 * Padding - 10;
+
+    private MarkupString SvgText(double x, double y, string? anchor, string cssClass, string content)
+    {
+        string anchorAttr = anchor != null ? $" text-anchor=\"{anchor}\"" : "";
+        string escaped = System.Net.WebUtility.HtmlEncode(content);
+        return new MarkupString($"<text x=\"{x}\" y=\"{y}\"{anchorAttr} class=\"{cssClass}\">{escaped}</text>");
+    }
+}
