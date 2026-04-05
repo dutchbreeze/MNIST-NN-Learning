@@ -1,6 +1,7 @@
 # MNIST Neural Network Trainer
 
 A real-time, interactive neural network trainer and visualizer built with Blazor WebAssembly and ASP.NET Core. Train a handwritten digit classifier on MNIST-style images and watch the network learn in your browser.
+Using a MNIST subset using 100 images per number. Feel free to expand, images loader can be throttled.
 
 Most examples do recognition using an existing model. This app is focused on the learning process and uses it's output for learning.
 
