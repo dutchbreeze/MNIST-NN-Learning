@@ -66,12 +66,7 @@ The server reads these on demand and converts them to grayscale pixel arrays.
 
 ### Run
 
-```bash
-cd MnistNNTraining.Server
-dotnet run
-```
-
-Open the URL shown in the terminal (typically `https://localhost:5001` or `http://localhost:5000`). The app will auto-detect images in your `TrainingData/` folder.
+Run server and app. The server is only used to serve the images to the blazor app.
 
 ## Controls Reference
 
@@ -169,4 +164,4 @@ Mnist NN Training/
 
 MIT
 
-Guido Adam - 2026
+Guido Adam (guido@dutchbreeze.com)
