@@ -1,8 +1,6 @@
 # MNIST Neural Network Trainer
 
-A real-time, interactive neural network trainer and visualizer built with Blazor WebAssembly and ASP.NET Core. Train a handwritten digit classifier on MNIST-style images and watch the network learn in your browser.
-Using a MNIST subset using 100 images per number. Feel free to expand, images loader can be throttled.
-
+A real-time, interactive neural network trainer and visualizer built in Blazor WebAssembly and ASP.NET Core. Train a handwritten digit classifier on MNIST-style images and watch the network learn in your browser.
 Most examples do recognition using an existing model. This app is focused on the learning process and uses it's output for learning.
 
 ![Architecture: 784 → 128 → 10 with Sigmoid activation]
@@ -42,27 +40,9 @@ Weights are initialized using Xavier initialization. Training uses per-sample st
 
 - [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
 
-### Setup
-
-```bash
-git clone <repo-url>
-cd "Mnist NN Training"
-```
-
 ### Prepare Training Data
 
-Place your 28x28 pixel JPG or PNG images into digit-labeled subfolders:
-
-```
-TrainingData/
-├── 0/    ← images of digit 0
-├── 1/    ← images of digit 1
-├── 2/
-├── ...
-└── 9/    ← images of digit 9
-```
-
-The server reads these on demand and converts them to grayscale pixel arrays.
+Using a MNIST subset using 100 images per number. Feel free to expand. The original set is 60k and the image-loader can be throttled.
 
 ### Run
 
@@ -150,7 +130,7 @@ Mnist NN Training/
 
 ## How It Works
 
-1. **Data loading** — the server reads JPG/PNG files from `TrainingData/0-9/`, converts each to a 28x28 grayscale byte array using ImageSharp, and sends them to the browser as a compact binary payload.
+1. **Data loading** — the server reads JPG/PNG files from `TrainingData/0-9/`, converts each to a 28x28 grayscale byte array using ImageSharp, and sends them to the browser as a binary payload.
 
 2. **Forward pass** — pixel values (normalized to 0–1) feed into the input layer. Each hidden and output neuron computes a weighted sum of its inputs plus a bias, then applies the sigmoid function: `σ(x) = 1 / (1 + e^(-x))`.
 
