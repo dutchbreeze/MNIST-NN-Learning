@@ -32,6 +32,12 @@ public class TrainingService
     private int _snapshotCorrect;
     private int _snapshotIncorrect;
 
+    // Snapshot-level loss/accuracy tracking
+    private double _snapshotLoss;
+    private int _snapshotLossCount;
+    private int _snapshotAccuracyCorrect;
+    private int _snapshotAccuracyCount;
+
     // Periodic snapshot interval (every N samples processed, push a snapshot)
     public int SnapshotInterval { get; set; } = 100;
     private int _samplesSinceSnapshot;
@@ -70,6 +76,10 @@ public class TrainingService
         _samplesSinceSnapshot = 0;
         _snapshotCorrect = 0;
         _snapshotIncorrect = 0;
+        _snapshotLoss = 0;
+        _snapshotLossCount = 0;
+        _snapshotAccuracyCorrect = 0;
+        _snapshotAccuracyCount = 0;
         LossHistory.Clear();
         AccuracyHistory.Clear();
         CorrectHistory.Clear();
@@ -115,8 +125,13 @@ public class TrainingService
             {
                 // End of epoch
                 Network.EndEpoch();
-                LossHistory.Add(AverageLoss);
-                AccuracyHistory.Add(Network.Accuracy);
+
+                // Flush any remaining snapshot data at epoch boundary
+                if (_samplesSinceSnapshot > 0)
+                {
+                    PushSnapshot();
+                }
+
                 RunningLoss = 0;
                 RunningCount = 0;
                 CurrentSampleIndex = 0;
@@ -127,12 +142,22 @@ public class TrainingService
             CurrentSample = TrainingData[idx];
             double loss = Network.TrainSingle(CurrentSample.Pixels, CurrentSample.Label);
 
-            // Track correct/incorrect
+            // Track correct/incorrect for prediction chart
             int predicted = Array.IndexOf(Network.Layers[^1].Activations, Network.Layers[^1].Activations.Max());
             if (predicted == CurrentSample.Label)
+            {
                 _snapshotCorrect++;
+                _snapshotAccuracyCorrect++;
+            }
             else
+            {
                 _snapshotIncorrect++;
+            }
+
+            // Track loss for loss chart
+            _snapshotLoss += loss;
+            _snapshotLossCount++;
+            _snapshotAccuracyCount++;
 
             RunningLoss += loss;
             RunningCount++;
@@ -142,15 +167,35 @@ public class TrainingService
             // Push a snapshot every SnapshotInterval samples
             if (_samplesSinceSnapshot >= SnapshotInterval)
             {
-                CorrectHistory.Add(_snapshotCorrect);
-                IncorrectHistory.Add(_snapshotIncorrect);
-                _snapshotCorrect = 0;
-                _snapshotIncorrect = 0;
-                _samplesSinceSnapshot = 0;
+                PushSnapshot();
             }
         }
 
         OnStateChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// Push accumulated snapshot data to all history lists.
+    /// </summary>
+    private void PushSnapshot()
+    {
+        // Prediction chart data
+        CorrectHistory.Add(_snapshotCorrect);
+        IncorrectHistory.Add(_snapshotIncorrect);
+        _snapshotCorrect = 0;
+        _snapshotIncorrect = 0;
+
+        // Loss/accuracy chart data
+        double avgLoss = _snapshotLossCount > 0 ? _snapshotLoss / _snapshotLossCount : 0;
+        double accuracy = _snapshotAccuracyCount > 0 ? (double)_snapshotAccuracyCorrect / _snapshotAccuracyCount * 100.0 : 0;
+        LossHistory.Add(avgLoss);
+        AccuracyHistory.Add(accuracy);
+
+        _snapshotLoss = 0;
+        _snapshotLossCount = 0;
+        _snapshotAccuracyCorrect = 0;
+        _snapshotAccuracyCount = 0;
+        _samplesSinceSnapshot = 0;
     }
 
     /// <summary>
@@ -176,8 +221,10 @@ public class TrainingService
         if (CurrentSampleIndex >= TrainingData.Count)
         {
             Network.EndEpoch();
-            LossHistory.Add(AverageLoss);
-            AccuracyHistory.Add(Network.Accuracy);
+            if (_samplesSinceSnapshot > 0)
+            {
+                PushSnapshot();
+            }
             RunningLoss = 0;
             RunningCount = 0;
             CurrentSampleIndex = 0;
