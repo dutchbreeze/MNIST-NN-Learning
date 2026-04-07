@@ -3,3 +3,6 @@ MnistNNTraining/bin
 MnistNNTraining/obj
 MnistNNTraining.Server/bin
 MnistNNTraining.Server/obj
+MnistNNTraining/Properties/PublishProfiles
+*.user
+MnistNNTraining.Server/Properties/PublishProfiles

@@ -137,9 +137,20 @@ public class DataController : ControllerBase
 
     private string GetTrainingDataPath()
     {
-        // Look for TrainingData folder relative to the solution root
         var contentRoot = _env.ContentRootPath;
+
+        // 1. Published/deployed: TrainingData is inside the content root
+        var insideContentRoot = Path.Combine(contentRoot, "TrainingData");
+        if (Directory.Exists(insideContentRoot))
+            return insideContentRoot;
+
+        // 2. Local development: TrainingData is at the solution root (one level up)
         var solutionDir = Path.GetFullPath(Path.Combine(contentRoot, ".."));
-        return Path.Combine(solutionDir, "TrainingData");
+        var atSolutionRoot = Path.Combine(solutionDir, "TrainingData");
+        if (Directory.Exists(atSolutionRoot))
+            return atSolutionRoot;
+
+        // Fall back to the content root path (will trigger "not found" in callers)
+        return insideContentRoot;
     }
 }

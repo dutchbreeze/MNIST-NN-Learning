@@ -17,7 +17,7 @@
   </ItemGroup>
   
 <ItemGroup>
-  <None Include="..\TrainingData\**\*" LinkBase="TrainingData" CopyToOutputDirectory="PreserveNewest" />
+  <Content Include="..\TrainingData\**\*" LinkBase="TrainingData" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
 </ItemGroup>
 
 </Project>

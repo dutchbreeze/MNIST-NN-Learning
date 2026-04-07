@@ -7,9 +7,14 @@ var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
+var apiBase = builder.Configuration["ApiBaseUrl"];
+var baseAddress = string.IsNullOrEmpty(apiBase)
+    ? builder.HostEnvironment.BaseAddress
+    : apiBase;
+
 builder.Services.AddScoped(sp => new HttpClient
 {
-    BaseAddress = new Uri(builder.HostEnvironment.BaseAddress),
+    BaseAddress = new Uri(baseAddress),
     Timeout = TimeSpan.FromMinutes(5)
 });
 builder.Services.AddSingleton<TrainingService>();
